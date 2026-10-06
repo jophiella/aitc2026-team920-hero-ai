@@ -1,0 +1,9 @@
+# Core Dependencies for AI Agent Project (Chung Khao)
+# Pinned versions to prevent dependency conflicts
+
+pydantic==2.10.6
+pydantic-settings==2.8.1
+python-dotenv==1.0.1
+requests==2.32.3
+httpx==0.28.1
+pytest==8.3.4
