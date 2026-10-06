@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -8,6 +9,12 @@ root_dir = chung_khao_dir.parent
 
 for p in [str(root_dir), str(chung_khao_dir), str(src_dir)]:
     if p not in sys.path:
+        sys.path.insert(0, p)
+
+# Hỗ trợ deploy trên Render / Docker qua biến môi trường PYTHONPATH
+pythonpath_env = os.environ.get("PYTHONPATH", "")
+for p in pythonpath_env.split(os.pathsep):
+    if p and p not in sys.path:
         sys.path.insert(0, p)
 
 from fastapi import FastAPI

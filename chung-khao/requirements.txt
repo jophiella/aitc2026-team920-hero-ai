@@ -1,9 +1,24 @@
 # Core Dependencies for AI Agent Project (Chung Khao)
 # Pinned versions to prevent dependency conflicts
 
+# Web Framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Pydantic & Settings
 pydantic==2.10.6
 pydantic-settings==2.8.1
+
+# AI / LLM
+openai==1.59.6
+langchain==0.3.14
+langchain-core==0.3.28
+langgraph==0.2.60
+
+# HTTP & utilities
 python-dotenv==1.0.1
 requests==2.32.3
 httpx==0.28.1
+
+# Testing
 pytest==8.3.4
