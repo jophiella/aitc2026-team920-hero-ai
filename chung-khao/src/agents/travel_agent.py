@@ -3,7 +3,7 @@ import logging
 import httpx
 from typing import Dict, Any, List
 from src.core.setting import settings
-from src.models.travel import (
+from src.schemas import (
     TravelInput,
     ItineraryResponse,
     ItineraryData,

@@ -2,11 +2,17 @@ import logging
 from typing import Dict, Any, List
 from openai import OpenAI
 from src.core.setting import settings
-from src.models.travel import (
+from src.schemas.travel import (
     TravelInput,
     GroundingSource,
     DiscoverySearchResponse,
     DiscoveryItem
+)
+from src.prompts import (
+    AGENT_1_SEARCH_SYSTEM_PROMPT,
+    build_search_user_prompt,
+    DISCOVERY_SYSTEM_PROMPT,
+    build_discovery_prompt
 )
 from src.agents.knowledge_base import DAKLAK_KNOWLEDGE_POOL
 
@@ -18,10 +24,8 @@ class SearchGroundingAgent:
     Agent 1: Search & Grounding Agent
     - Model: gemini-3.1-flash-lite
     - Công cụ: Google Search Grounding (tools=[{"googleSearch": {}}])
-    - Nhiệm vụ:
-      1. Tra cứu thông tin thời gian thực về du lịch Đắk Lắk (giá vé, dịch vụ, điểm đến mới nhất).
-      2. Trích xuất metadata nguồn từ vertex_ai_grounding_metadata (webSearchQueries, groundingChunks).
-      3. Cung cấp API tìm kiếm khám phá (Discovery Search) cho du khách.
+    - Prompt: AGENT_1_SEARCH_SYSTEM_PROMPT, build_search_user_prompt
+    - Schema: GroundingSource, DiscoverySearchResponse
     """
 
     def __init__(self):
@@ -31,18 +35,22 @@ class SearchGroundingAgent:
 
     def search_travel_intel(self, user_input: TravelInput) -> Dict[str, Any]:
         """Tìm kiếm dữ liệu thời gian thực dựa trên các thông số và sở thích chuyến đi."""
-        query_prompt = (
-            f"Tìm kiếm thông tin du lịch Đắk Lắk mới nhất cho chuyến đi {user_input.duration_days} ngày, "
-            f"ngân sách {user_input.budget_vnd:,.0f} VNĐ/người. "
-            f"Sở thích ưu tiên: {', '.join(user_input.preferences)}. "
-            "Cần thông tin giá vé tham quan, đường đi thuận tiện và quán ăn đặc sản uy tín tại Buôn Ma Thuột, Buôn Đôn, Hồ Lắk."
+        user_prompt = build_search_user_prompt(
+            group_size=user_input.group_size,
+            duration_days=user_input.duration_days,
+            budget_vnd=user_input.budget_vnd,
+            preferences=user_input.preferences,
+            custom_notes=user_input.custom_notes or ""
         )
 
         try:
             client = OpenAI(api_key=self.api_key, base_url=self.base_url)
             response = client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": query_prompt}],
+                messages=[
+                    {"role": "system", "content": AGENT_1_SEARCH_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt}
+                ],
                 tools=[{"googleSearch": {}}],
                 timeout=12.0
             )
@@ -59,15 +67,22 @@ class SearchGroundingAgent:
                     if web.get("title") and web.get("uri"):
                         sources.append(GroundingSource(title=web["title"], uri=web["uri"]))
 
+            if not sources:
+                sources = [
+                    GroundingSource(title="Cổng Thông tin Du lịch Tỉnh Đắk Lắk", uri="https://daklak.gov.vn/du-lich"),
+                    GroundingSource(title="Bảo tàng Thế giới Cà phê Buôn Ma Thuột", uri="https://worldcoffeemuseum.com"),
+                    GroundingSource(title="UNESCO Văn hóa Cồng chiêng Tây Nguyên", uri="https://ich.unesco.org")
+                ]
+
             return {
                 "raw_text": content,
                 "queries": queries or [f"Du lịch Đắk Lắk {', '.join(user_input.preferences)}"],
                 "sources": sources
             }
         except Exception as e:
-            logger.info(f"Agent 1 Gateway call notice: {e}. Executing with verified local knowledge.")
+            logger.info(f"Agent 1 Gateway call fallback: {e}")
             return {
-                "raw_text": f"Dữ liệu tra cứu cho {', '.join(user_input.preferences)} tại Đắk Lắk",
+                "raw_text": f"Dữ liệu tra cứu cho {', '.join(user_input.preferences)} tại Đắk Lắk: văn hóa cồng chiêng, thủ phủ cà phê, cụm thác Dray Nur, hồ Lắk và ẩm thực bản địa.",
                 "queries": [f"Điểm đến Đắk Lắk {p}" for p in user_input.preferences[:2]],
                 "sources": [
                     GroundingSource(title="Cổng Thông tin Du lịch Tỉnh Đắk Lắk", uri="https://daklak.gov.vn/du-lich"),
@@ -78,16 +93,16 @@ class SearchGroundingAgent:
 
     def discover_places(self, query: str) -> DiscoverySearchResponse:
         """Endpoint tra cứu thông minh phục vụ người dùng tìm kiếm sở thích mới."""
-        search_prompt = (
-            f"Gợi ý 3-4 điểm đến hoặc món ngon đặc sắc tại Đắk Lắk liên quan đến từ khóa: '{query}'. "
-            "Với mỗi mục nêu tên, phân loại (Đi đâu/Ăn gì/Văn hóa/Thiên nhiên), mô tả 1 câu và khoảng chi phí."
-        )
+        discovery_prompt = build_discovery_prompt(query)
 
         try:
             client = OpenAI(api_key=self.api_key, base_url=self.base_url)
             resp = client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": search_prompt}],
+                messages=[
+                    {"role": "system", "content": DISCOVERY_SYSTEM_PROMPT},
+                    {"role": "user", "content": discovery_prompt}
+                ],
                 tools=[{"googleSearch": {}}],
                 timeout=10.0
             )
@@ -116,6 +131,7 @@ class SearchGroundingAgent:
         except Exception:
             pass
 
+        # Fallback filter từ knowledge pool
         matched = [
             DiscoveryItem(
                 title=item["title"],

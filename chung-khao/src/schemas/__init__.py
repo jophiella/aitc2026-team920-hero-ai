@@ -1,0 +1,31 @@
+from src.schemas.travel import (
+    GroundingSource,
+    TravelInput,
+    Activity,
+    DayPlan,
+    BudgetBreakdown,
+    TripSummary,
+    ItineraryData,
+    ItineraryResponse,
+    CandidateItem,
+    CandidatePoolResponse,
+    DiscoverySearchRequest,
+    DiscoveryItem,
+    DiscoverySearchResponse,
+)
+
+__all__ = [
+    "GroundingSource",
+    "TravelInput",
+    "Activity",
+    "DayPlan",
+    "BudgetBreakdown",
+    "TripSummary",
+    "ItineraryData",
+    "ItineraryResponse",
+    "CandidateItem",
+    "CandidatePoolResponse",
+    "DiscoverySearchRequest",
+    "DiscoveryItem",
+    "DiscoverySearchResponse",
+]

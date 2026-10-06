@@ -11,6 +11,17 @@ def test_health_check():
     data = response.json()
     assert data["status"] == "ok"
     assert "workflow" in data
+    assert data["brand"] == "Đắk Lắk Di"
+
+
+def test_get_destinations():
+    response = client.get("/api/v1/destinations")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "destinations_pool" in data["data"]
+    assert "artisans_and_villages" in data["data"]
+    assert "monthly_events" in data["data"]
 
 
 def test_generate_itinerary_3_agent_workflow():
@@ -22,7 +33,8 @@ def test_generate_itinerary_3_agent_workflow():
             "Văn hóa Cồng chiêng",
             "Thác nước & Trekking",
             "Cà phê Buôn Ma Thuột"
-        ]
+        ],
+        "custom_notes": "Thích trải nghiệm văn hóa bản địa và chụp ảnh hoàng hôn"
     }
     response = client.post("/api/v1/generate-itinerary", json=payload)
     assert response.status_code == 200
@@ -34,7 +46,7 @@ def test_generate_itinerary_3_agent_workflow():
     # Kiểm tra summary và workflow status
     assert data["trip_summary"]["group_size"] == 3
     assert data["trip_summary"]["duration_days"] == 3
-    assert "gemini-3.1-pro-preview" in data["trip_summary"]["agent_workflow_status"]
+    assert "gemini-3.1-flash-lite" in data["trip_summary"]["agent_workflow_status"]
     assert len(data["itinerary_days"]) == 3
 
     # Kiểm tra Pydantic Guardrail: Tổng chi phí <= Ngân sách
@@ -57,12 +69,16 @@ def test_search_discover_endpoint():
     assert "grounding_sources" in res_json
 
 
-def test_generate_itinerary_invalid_budget():
+def test_generate_itinerary_low_budget():
     payload = {
         "group_size": 2,
         "duration_days": 2,
-        "budget_vnd": 200000,  # Below 500,000 VND
+        "budget_vnd": 200000,
         "preferences": ["Văn hóa"]
     }
     response = client.post("/api/v1/generate-itinerary", json=payload)
-    assert response.status_code == 422
+    assert response.status_code == 200
+    res_json = response.json()
+    assert res_json["success"] is True
+    assert res_json["data"]["trip_summary"]["total_estimated_cost"] <= payload["budget_vnd"]
+

@@ -44,12 +44,12 @@ class Settings(BaseSettings):
     # API Keys & Gateway Configuration
     AI_LOG_API_KEY: Optional[SecretStr] = Field(
         default=None,
-        validation_alias=AliasChoices("AI_LOG_API_KEY", "API_KEY", "LLM_API_KEY"),
-        description="BTC API Log Key / Gateway Key"
+        description="BTC API Log Key (starts with aitc_)"
     )
     LLM_API_KEY: Optional[SecretStr] = Field(
         default=None,
-        description="LLM Provider API Key (fallback)"
+        validation_alias=AliasChoices("LLM_API_KEY", "API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY"),
+        description="LLM Provider Virtual Key (starts with sk-)"
     )
     
     # Gateway & Log URLs
@@ -58,13 +58,13 @@ class Settings(BaseSettings):
         description="BTC AI log server URL"
     )
     AI_GATEWAY_URL: str = Field(
-        default="https://live.thucchien.ai/api",
+        default=os.getenv("GOOGLE_GEMINI_BASE_URL", "https://api.thucchien.ai"),
         description="Internal API Gateway Base URL"
     )
 
     # LLM Parameters
     DEFAULT_MODEL: str = Field(
-        default="gemini-2.5-flash",
+        default="gemini-3.1-flash-lite",
         description="Default LLM model name"
     )
     LLM_TEMPERATURE: float = Field(
@@ -80,14 +80,28 @@ class Settings(BaseSettings):
 
     def get_api_key(self) -> str:
         """
-        Safely retrieve the loaded API key without exposing secret string representations.
-        Returns active API key or empty string if not configured.
+        Lấy API key cho LLM Gateway (ưu tiên key bắt đầu bằng sk-).
+        Tự động .strip() loại bỏ khoảng trắng thừa.
         """
-        if self.AI_LOG_API_KEY:
-            return self.AI_LOG_API_KEY.get_secret_value()
+        for env_name in ["LLM_API_KEY", "GEMINI_API_KEY", "API_KEY", "OPENAI_API_KEY"]:
+            val = os.getenv(env_name, "").strip()
+            if val and val.startswith("sk-"):
+                return val
+
         if self.LLM_API_KEY:
-            return self.LLM_API_KEY.get_secret_value()
-        return os.getenv("AI_LOG_API_KEY", os.getenv("API_KEY", ""))
+            val = self.LLM_API_KEY.get_secret_value().strip()
+            if val and val.startswith("sk-"):
+                return val
+
+        for env_name in ["LLM_API_KEY", "GEMINI_API_KEY", "API_KEY", "OPENAI_API_KEY"]:
+            val = os.getenv(env_name, "").strip()
+            if val:
+                return val
+
+        if self.AI_LOG_API_KEY:
+            return self.AI_LOG_API_KEY.get_secret_value().strip()
+
+        return os.getenv("AI_LOG_API_KEY", "").strip()
 
     def get_auth_headers(self) -> dict:
         """
@@ -101,6 +115,7 @@ class Settings(BaseSettings):
             headers["Authorization"] = f"Bearer {api_key}"
             headers["X-API-Key"] = api_key
         return headers
+
 
 
 # Global singleton settings instance
